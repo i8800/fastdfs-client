@@ -1,11 +1,11 @@
 package go_fastdfs
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"testing"
 	"time"
-	"bytes"
-	"encoding/binary"
 )
 
 func Test_fileinfo(t *testing.T) {

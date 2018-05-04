@@ -3,20 +3,20 @@ package go_fastdfs
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"github.com/monkey92t/go_fastdfs/pool"
 	"strings"
-	"fmt"
 )
 
 //对fastdfs操作
 func (c *FastdfsClient) getStorageInfo(fileid string) ([]byte, error) {
 	//return c.trackerQueryStore(fileid, TRACKER_PROTO_CMD_SERVICE_QUERY_FETCH_ONE)
-    	_, remoteName, err := splitFileid(fileid)
-    	if err != nil {
-    	    return nil, err
+	_, remoteName, err := splitFileid(fileid)
+	if err != nil {
+		return nil, err
 	}
 
-	num := FDFS_LOGIC_FILE_PATH_LEN * 2 + DFS_FILENAME_BASE64_LENGTH
+	num := FDFS_LOGIC_FILE_PATH_LEN*2 + DFS_FILENAME_BASE64_LENGTH
 	var b string
 	if len(remoteName) < num {
 		b = remoteName[FDFS_LOGIC_FILE_PATH_LEN:]
