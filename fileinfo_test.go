@@ -1,8 +1,6 @@
 package go_fastdfs
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"testing"
 	"time"
@@ -23,11 +21,5 @@ func Test_fileinfo(t *testing.T) {
 		panic(err)
 	}
 
-	buf := bytes.NewBuffer(res)
-	var filesize int64
-	err = binary.Write(buf, binary.BigEndian, filesize)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(filesize)
+	fmt.Println(res)
 }

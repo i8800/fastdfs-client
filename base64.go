@@ -1,21 +1,21 @@
 package go_fastdfs
 
 import (
+	"bytes"
 	"errors"
-	"fmt"
 	"strings"
 )
 
 const (
 	IGNORE    = -1
 	PAD       = -2
-	CH_PLUS   = '+'
-	CH_SPLASH = '/'
-	CH_PAD    = '='
+	CH_PLUS   = '-'
+	CH_SPLASH = '_'
+	CH_PAD    = '.'
 )
 
 var (
-	valueToChar [64]int8
+	valueToChar [64]int16
 	charToValue [256]int16
 )
 
@@ -28,23 +28,17 @@ func decodeAuto(s string) ([]byte, error) {
 }
 
 func decode(s string) ([]byte, error) {
-	fmt.Println(s, len(s))
 	var (
 		dummies  int
-		combined uint
+		combined int
 		cycle    int
-		j        int
 	)
 
 	ln := len(s)
-	b := make([]byte, ln/4*3)
+	var b bytes.Buffer
 	for i := 0; i < ln; i++ {
 		c := s[i]
-		value := IGNORE
-		if c <= 255 {
-			value = int(charToValue[c])
-		}
-
+		value := int(charToValue[c])
 		switch value {
 		case IGNORE:
 			break
@@ -55,68 +49,57 @@ func decode(s string) ([]byte, error) {
 		default:
 			switch cycle {
 			case 0:
-				combined = uint(value)
+				combined = value
 				cycle = 1
 			case 1:
 				combined <<= 6
-				combined |= uint(value)
+				combined |= value
 				cycle = 2
 			case 2:
 				combined <<= 6
-				combined |= uint(value)
+				combined |= value
 				cycle = 3
 			case 3:
 				combined <<= 6
-				combined |= uint(value)
-				b[j+2] = byte(combined)
-				combined >>= 8
-				b[j+1] = byte(combined)
-				combined >>= 8
-				b[j] = byte(combined)
-				j += 3
+				combined |= value
+				b.WriteByte(byte(combined >> 16))
+				b.WriteByte(byte((combined & 0x0000ff00) >> 8))
+				b.WriteByte(byte(combined & 0x000000ff))
 				cycle = 0
 			}
 		}
 	}
 
 	if cycle != 0 {
-		return nil, errors.New("Input to decode not an even multiple of 4 characters; pad with =.")
+		return nil, errors.New("Input to decode not an even multiple of 4 characters.")
 	}
 
-	j -= dummies
-	if j != len(b) {
-		b2 := make([]byte, j)
-		copy(b2, b)
-		b = b2
-	}
-
-	return b, nil
+	return b.Bytes(), nil
 }
 
 func init() {
+	//A-Z...
+	for i := 0; i <= 25; i++ {
+		valueToChar[i] = int16('A' + i)
+	}
+	//a-z
+	for i := 0; i <= 25; i++ {
+		valueToChar[i+26] = int16('a' + i)
+	}
+	//0-9
+	for i := 0; i <= 9; i++ {
+		valueToChar[i+52] = int16('0' + i)
+	}
+	valueToChar[62] = CH_PLUS
+	valueToChar[63] = CH_SPLASH
+
 	for i := 0; i < 256; i++ {
 		charToValue[i] = int16(IGNORE)
 	}
 
-	var index int8
-	for i := 'A'; i <= 'Z'; i++ {
-		valueToChar[index] = int8(i)
-		index++
-	}
-	for i := 'a'; i <= 'z'; i++ {
-		valueToChar[index] = int8(i)
-		index++
-	}
-	for i := '0'; i <= '9'; i++ {
-		valueToChar[index] = int8(i)
-		index++
-	}
-	valueToChar[index] = CH_PLUS
-	index++
-	valueToChar[index] = CH_SPLASH
-
 	for i := 0; i < 64; i++ {
 		charToValue[valueToChar[i]] = int16(i)
 	}
+
 	charToValue[CH_PAD] = PAD
 }

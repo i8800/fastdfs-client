@@ -3,28 +3,51 @@ package go_fastdfs
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"github.com/monkey92t/go_fastdfs/pool"
 	"strings"
+	"time"
 )
 
+type FileInfo struct {
+	CreateTime time.Time
+	Address    string
+	FileSize   int
+	Crc32      int
+}
+
 //对fastdfs操作
-func (c *FastdfsClient) getStorageInfo(fileid string) ([]byte, error) {
-	//return c.trackerQueryStore(fileid, TRACKER_PROTO_CMD_SERVICE_QUERY_FETCH_ONE)
+func (c *FastdfsClient) getStorageInfo(fileid string) (*FileInfo, error) {
 	_, remoteName, err := splitFileid(fileid)
 	if err != nil {
 		return nil, err
 	}
-
-	num := FDFS_LOGIC_FILE_PATH_LEN*2 + DFS_FILENAME_BASE64_LENGTH
+	end := FDFS_LOGIC_FILE_PATH_LEN + (FDFS_LOGIC_FILE_PATH_LEN + FDFS_FILENAME_BASE64_LENGTH)
 	var b string
-	if len(remoteName) < num {
+	if len(remoteName) < end {
 		b = remoteName[FDFS_LOGIC_FILE_PATH_LEN:]
 	} else {
-		b = remoteName[FDFS_LOGIC_FILE_PATH_LEN:len(remoteName)]
+		b = remoteName[FDFS_LOGIC_FILE_PATH_LEN:end]
 	}
-	fmt.Println(b)
-	return decodeAuto(b)
+
+	deData, err := decodeAuto(b)
+	if err != nil {
+		return nil, err
+	}
+
+	fileinfo := &FileInfo{
+		Address:    ipToString(int(buffToInt32(deData, 0))),
+		CreateTime: time.Unix(int64(buffToInt32(deData, 4)), 0),
+		Crc32:      int(buffToInt32(deData, 16)),
+	}
+	size := buffToInt64(deData, 8)
+	if size>>63 != 0 {
+		size &= 0xFFFFFFFF
+	} else {
+		size = -1
+	}
+	fileinfo.FileSize = int(size)
+
+	return fileinfo, nil
 }
 
 func (c *FastdfsClient) trackerQueryStore(fileid string, cmd int8) ([]byte, error) {
