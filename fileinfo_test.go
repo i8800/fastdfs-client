@@ -8,7 +8,7 @@ import (
 
 func Test_fileinfo(t *testing.T) {
 	client := NewClient(&Options{
-		Addr:               "11.11.1.72:22122",
+		Addr:               "11.11.0.72:22122",
 		DialTimeout:        10 * time.Second,
 		PoolSize:           10,
 		PoolTimeout:        20 * time.Second,
@@ -16,7 +16,11 @@ func Test_fileinfo(t *testing.T) {
 		IdleCheckFrequency: 60 * time.Second,
 	})
 
-	res, err := client.getStorageInfo("group2/M00/06/33/CwsAhloNOzeAOGe1GJpRX2yJAdc69.epub")
+	fileid := "group2/M00/06/33/CwsAhloNOzeAOGe1GJpRX2yJAdc69.epub"
+
+	groupName, remoteName, err := splitFileid(fileid)
+
+	res, err := client.download(groupName, remoteName)
 	if err != nil {
 		panic(err)
 	}
