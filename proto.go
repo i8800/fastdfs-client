@@ -2,20 +2,20 @@ package go_fastdfs
 
 import (
 	"bytes"
+	"errors"
 	"strconv"
 	"strings"
-	"errors"
 )
 
 const (
 	TRACKER_PROTO_CMD_RESP                                  = 100
 	TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITHOUT_GROUP_ONE = 101
 	TRACKER_PROTO_CMD_SERVICE_QUERY_FETCH_ONE               = 102
-	TRACKER_PROTO_CMD_SERVICE_QUERY_UPDATE = 103
+	TRACKER_PROTO_CMD_SERVICE_QUERY_UPDATE                  = 103
 
 	STORAGE_PROTO_CMD_QUERY_FILE_INFO = 22
 	STORAGE_PROTO_CMD_RESP            = TRACKER_PROTO_CMD_RESP
-	STORAGE_PROTO_CMD_DOWNLOAD_FILE = 14
+	STORAGE_PROTO_CMD_DOWNLOAD_FILE   = 14
 
 	FDFS_PROTO_CMD_ACTIVE_TEST = 111
 
@@ -96,7 +96,6 @@ func buildGroupName(gn string) []byte {
 	copy(b, []byte(gn))
 	return b
 }
-
 
 func splitFileid(fid string) (string, string, error) {
 	fid = strings.TrimSpace(fid)

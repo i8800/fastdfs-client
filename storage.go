@@ -3,28 +3,28 @@ package go_fastdfs
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"github.com/monkey92t/go_fastdfs/pool"
 	"io"
 	"sync"
-	"errors"
 )
 
 type Request interface {
-	marshal() ([]byte)
+	marshal() []byte
 }
 type Response interface {
 	unmarshal([]byte) error
 }
 
 type Storage struct {
-	addr string
-	groupName string
+	addr       string
+	groupName  string
 	remoteName string
-	pathIndex int
-	connPool *pool.ConnPool
-	conn *pool.Conn
-	mu sync.Mutex
-	closed bool
+	pathIndex  int
+	connPool   *pool.ConnPool
+	conn       *pool.Conn
+	mu         sync.Mutex
+	closed     bool
 }
 
 func (s *Storage) downloadFile(offset, downloadSize int64) (io.ReadCloser, error) {
@@ -36,7 +36,7 @@ func (s *Storage) downloadFile(offset, downloadSize int64) (io.ReadCloser, error
 	defer s.connPool.Put(conn)
 
 	//构建tracker
-	th := buildTrackerHeader(STORAGE_PROTO_CMD_DOWNLOAD_FILE, int64(FDFS_PROTO_PKG_LEN_SIZE * 2 + FDFS_GROUP_NAME_MAX_LEN + len(s.remoteName)))
+	th := buildTrackerHeader(STORAGE_PROTO_CMD_DOWNLOAD_FILE, int64(FDFS_PROTO_PKG_LEN_SIZE*2+FDFS_GROUP_NAME_MAX_LEN+len(s.remoteName)))
 	buff := bytes.NewBuffer(th.bytes())
 	request := downloadRequestMarshal(offset, downloadSize, s.groupName, s.remoteName)
 	buff.Write(request)

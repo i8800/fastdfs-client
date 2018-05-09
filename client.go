@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"github.com/monkey92t/go_fastdfs/pool"
+	"io"
+	"net"
+	"strconv"
 	"strings"
 	"time"
-	"strconv"
-	"net"
-	"io"
 )
 
 type FileInfo struct {
@@ -180,7 +180,6 @@ func (c *FastdfsClient) getStorePoolConn(addr string) (*pool.Conn, error) {
 	return conn, nil
 }
 
-
 //查询已有文件存储信息
 func (c *FastdfsClient) queryStorage(gname, rname string, cmd int8) (*Storage, error) {
 	conn, err := getConn(c.connPool)
@@ -221,15 +220,15 @@ func (c *FastdfsClient) queryStorage(gname, rname string, cmd int8) (*Storage, e
 	ipaddr := readStr(buff[FDFS_GROUP_NAME_MAX_LEN : FDFS_GROUP_NAME_MAX_LEN+FDFS_IPADDR_SIZE-1])
 	port := buffToInt64(buff, FDFS_GROUP_NAME_MAX_LEN+FDFS_IPADDR_SIZE-1)
 
-	addr := net.JoinHostPort(ipaddr, strconv.FormatInt(port,10))
+	addr := net.JoinHostPort(ipaddr, strconv.FormatInt(port, 10))
 	p, err := c.getStoragePool(addr)
 	if err != nil {
 		return nil, err
 	}
 	return &Storage{
-		addr:net.JoinHostPort(ipaddr, strconv.FormatInt(port,10)),
-		groupName:group,
-		remoteName:rname,
-		connPool:p,
+		addr:       net.JoinHostPort(ipaddr, strconv.FormatInt(port, 10)),
+		groupName:  group,
+		remoteName: rname,
+		connPool:   p,
 	}, nil
 }
