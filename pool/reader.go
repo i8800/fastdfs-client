@@ -42,6 +42,10 @@ func (r *Reader) ReadN(n int) ([]byte, error) {
 	return b, nil
 }
 
+func (r *Reader) Read(p []byte) (n int, err error) {
+	return r.src.Read(p)
+}
+
 //从指定的io.Reader中读取指定的字节
 func readN(r io.Reader, b []byte, n int) ([]byte, error) {
 	if n == 0 && b == nil {

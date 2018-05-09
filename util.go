@@ -2,7 +2,8 @@ package go_fastdfs
 
 import "bytes"
 
-func disAddr(addr []byte) []byte {
-	index := bytes.IndexByte(addr, 0)
-	return addr[:index]
+//从buff中读取byte不为0的部分
+func readStr(buff []byte) string {
+	index := bytes.IndexByte(buff, 0)
+	return string(buff[:index])
 }

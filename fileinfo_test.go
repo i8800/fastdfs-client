@@ -1,7 +1,6 @@
 package go_fastdfs
 
 import (
-	"fmt"
 	"testing"
 	"time"
 )
@@ -16,14 +15,26 @@ func Test_fileinfo(t *testing.T) {
 		IdleCheckFrequency: 60 * time.Second,
 	})
 
-	fileid := "group2/M00/06/33/CwsAhloNOzeAOGe1GJpRX2yJAdc69.epub"
+	//fileid := "group2/M00/06/33/CwsAhloNOzeAOGe1GJpRX2yJAdc69.epub"
+	fileid := "group1/M00/C0/3B/CwsASlZdXWKAFMIiAABet4qJ5yc108.jpg"
 
-	groupName, remoteName, err := splitFileid(fileid)
-
-	res, err := client.download(groupName, remoteName)
+	fileinfo, err := client.FileInfo(fileid)
 	if err != nil {
-		panic(err)
+		t.Error(err)
+	}
+	res, err := client.DownloadToIoReader(fileid, 0, fileinfo.FileSize)
+	if err != nil {
+		t.Error(res)
 	}
 
-	fmt.Println(res)
+	//此处必须显示的关闭res资源，否则会导致连接池泄漏
+	defer res.Close()
+
+	temp := make([]byte, 1024)
+	_, err = res.Read(temp)
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Log(len(temp))
 }

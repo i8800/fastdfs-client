@@ -3,15 +3,21 @@ package go_fastdfs
 import (
 	"bytes"
 	"strconv"
+	"strings"
+	"errors"
 )
 
 const (
 	TRACKER_PROTO_CMD_RESP                                  = 100
 	TRACKER_PROTO_CMD_SERVICE_QUERY_STORE_WITHOUT_GROUP_ONE = 101
 	TRACKER_PROTO_CMD_SERVICE_QUERY_FETCH_ONE               = 102
+	TRACKER_PROTO_CMD_SERVICE_QUERY_UPDATE = 103
 
 	STORAGE_PROTO_CMD_QUERY_FILE_INFO = 22
 	STORAGE_PROTO_CMD_RESP            = TRACKER_PROTO_CMD_RESP
+	STORAGE_PROTO_CMD_DOWNLOAD_FILE = 14
+
+	FDFS_PROTO_CMD_ACTIVE_TEST = 111
 
 	FDFS_GROUP_NAME_MAX_LEN = 16
 	FDFS_IPADDR_SIZE        = 16
@@ -82,4 +88,22 @@ func ipToString(ipInt int) string {
 		}
 	}
 	return buffer.String()
+}
+
+//组装groupname
+func buildGroupName(gn string) []byte {
+	b := make([]byte, FDFS_GROUP_NAME_MAX_LEN)
+	copy(b, []byte(gn))
+	return b
+}
+
+
+func splitFileid(fid string) (string, string, error) {
+	fid = strings.TrimSpace(fid)
+	p := strings.SplitN(fid, "/", 2)
+	if len(p) < 2 {
+		return "", "", errors.New("Fileid format error.")
+	}
+
+	return p[0], p[1], nil
 }

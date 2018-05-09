@@ -6,6 +6,8 @@ import (
 	"github.com/monkey92t/go_fastdfs/pool"
 	"strings"
 	"time"
+	"strconv"
+	"net"
 	"io"
 )
 
@@ -17,7 +19,7 @@ type FileInfo struct {
 }
 
 //获取文件信息，必要时从存储获取
-func (c *FastdfsClient) getFileInfo(fileid string) (*FileInfo, error) {
+func (c *FastdfsClient) FileInfo(fileid string) (*FileInfo, error) {
 	groupName, remoteName, err := splitFileid(fileid)
 	if err != nil {
 		return nil, err
@@ -67,12 +69,14 @@ func (c *FastdfsClient) getFileInfo(fileid string) (*FileInfo, error) {
 //从存储服务器获取文件信息
 func (c *FastdfsClient) queryFileInfo(groupName, remoteName string) (*FileInfo, error) {
 	//组装trackerHeader
-	conn, _, err := c.connPool.Get()
+	conn, err := getConn(c.connPool)
 	if err != nil {
 		return nil, err
 	}
 
-	groupBytes := c.buildGroupName(groupName)
+	defer c.connPool.Put(conn)
+
+	groupBytes := buildGroupName(groupName)
 
 	th := buildTrackerHeader(STORAGE_PROTO_CMD_QUERY_FILE_INFO, int64(len(groupBytes)+len(remoteName)))
 
@@ -96,7 +100,7 @@ func (c *FastdfsClient) queryFileInfo(groupName, remoteName string) (*FileInfo, 
 	crc32 := int(buffToInt64(buff, 2*FDFS_PROTO_PKG_LEN_SIZE))
 	start := 3 * FDFS_PROTO_PKG_LEN_SIZE
 	end := start + FDFS_IPADDR_SIZE
-	ipaddr := string(disAddr(buff[start:end]))
+	ipaddr := string(readStr(buff[start:end]))
 
 	return &FileInfo{
 		Address:    ipaddr,
@@ -106,115 +110,67 @@ func (c *FastdfsClient) queryFileInfo(groupName, remoteName string) (*FileInfo, 
 	}, nil
 }
 
-func (c *FastdfsClient) download(groupName, remoteName string) (io.Reader, error) {
-	conn, _, err := c.connPool.Get()
+func (c *FastdfsClient) DownloadToIoReader(fileid string, offset, size int64) (io.ReadCloser, error) {
+	groupName, remoteName, err := splitFileid(fileid)
 	if err != nil {
 		return nil, err
 	}
 
-	groupBytes := c.buildGroupName(groupName)
-
-	th := buildTrackerHeader(TRACKER_PROTO_CMD_SERVICE_QUERY_FETCH_ONE, int64(len(groupBytes)+len(remoteName)))
-	whole := new(bytes.Buffer)
-	whole.Write(th.bytes())
-	whole.Write(groupBytes)
-	whole.WriteString(remoteName)
-
-	_, err = conn.Write(whole.Bytes())
-	if err != nil {
-		return nil, err
-	}
-
-	buff, err := th.recvPackage(conn, STORAGE_PROTO_CMD_RESP, TRACKER_QUERY_STORAGE_FETCH_BODY_LEN)
-	if err != nil {
-		return nil, err
-	}
-
-	ipaddr := disAddr(buff[FDFS_GROUP_NAME_MAX_LEN:FDFS_GROUP_NAME_MAX_LEN+FDFS_IPADDR_SIZE-1])
-	port := buffToInt64(buff, FDFS_GROUP_NAME_MAX_LEN+FDFS_IPADDR_SIZE-1)
-
-	return nil, nil
+	return c.download(groupName, remoteName, offset, size)
 }
 
-//func (c *FastdfsClient) trackerQueryStore(fileid string, cmd int8) ([]byte, error) {
-//	groupName, remoteName, err := splitFileid(fileid)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	if len(groupName) > FDFS_GROUP_NAME_MAX_LEN {
-//		return nil, errors.New("groupname is too long.")
-//	}
-//
-//	conn, err := c.getPoolConn()
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	th := &trackerHeader{
-//		pkgLen: int64(FDFS_GROUP_NAME_MAX_LEN + len(remoteName)),
-//		cmd:    cmd,
-//	}
-//
-//	if err := th.sendHeader(conn); err != nil {
-//		return nil, err
-//	}
-//
-//	fileBuff := bytes.NewBufferString(groupName)
-//	for i := fileBuff.Len(); i < FDFS_GROUP_NAME_MAX_LEN; i++ {
-//		fileBuff.WriteByte(byte(0))
-//	}
-//	fileBuff.WriteString(remoteName)
-//	if _, err := conn.Write(fileBuff.Bytes()); err != nil {
-//		return nil, err
-//	}
-//
-//	if err := th.recvHeader(conn); err != nil {
-//		return nil, err
-//	}
-//
-//	recvBuff, err := conn.Reader.ReadN(int(th.pkgLen))
-//
-//	return recvBuff, err
-//}
+func (c *FastdfsClient) download(groupName, remoteName string, offset, size int64) (io.ReadCloser, error) {
+	storage, err := c.queryStorage(groupName, remoteName, TRACKER_PROTO_CMD_SERVICE_QUERY_FETCH_ONE)
+	if err != nil {
+		return nil, err
+	}
 
-//组装groupname
-func (c *FastdfsClient) buildGroupName(gn string) []byte {
-	b := make([]byte, FDFS_GROUP_NAME_MAX_LEN)
-	copy(b, []byte(gn))
-	return b
+	return storage.downloadFile(offset, size)
 }
 
 //获取默认链接的fastdfs pool.conn
 func (c *FastdfsClient) getPoolConn() (*pool.Conn, error) {
-	conn, _, err := c.connPool.Get()
-	return conn, err
+	return getConn(c.connPool)
 }
 
-//根据ip:port获取一个可用的存储*pool.Conn
-//如果没有则创建一个
-func (c *FastdfsClient) getStorePoolConn(addr string) (*pool.Conn, error) {
+//根据op:port 获取一个pool.connpool
+func (c *FastdfsClient) getStoragePool(addr string) (*pool.ConnPool, error) {
 	addr = strings.TrimSpace(addr)
 	if "" == addr {
 		return nil, errors.New("addr is null.")
 	}
 
+	if addr == c.opt.Addr {
+		return c.connPool, nil
+	}
+
+	c.mu.Lock()
+	p, ok := c.storePools[addr]
+	if !ok {
+		poolOpt := c.getPoolOpt()
+		poolOpt.Dialer = defaultDialer(addr, c.opt.DialTimeout)
+		p = pool.NewConnPool(poolOpt)
+		c.storePools[addr] = p
+	}
+	c.mu.Unlock()
+
+	return p, nil
+}
+
+//根据ip:port获取一个可用的存储*pool.Conn
+//如果没有则创建一个
+func (c *FastdfsClient) getStorePoolConn(addr string) (*pool.Conn, error) {
 	var conn *pool.Conn
 	var err error
 
 	if addr != c.opt.Addr {
-		c.mu.Lock()
-		p, ok := c.storePools[addr]
-		if !ok {
-			poolOpt := c.getPoolOpt()
-			poolOpt.Dialer = defaultDialer(addr, c.opt.DialTimeout)
-			p = pool.NewConnPool(poolOpt)
-			c.storePools[addr] = p
+		p, err := c.getStoragePool(addr)
+		if err != nil {
+			return nil, err
 		}
-		c.mu.Unlock()
-		conn, _, err = p.Get()
+		conn, err = getConn(p)
 	} else {
-		conn, _, err = c.connPool.Get()
+		conn, err = getConn(c.connPool)
 	}
 
 	if err != nil {
@@ -224,12 +180,56 @@ func (c *FastdfsClient) getStorePoolConn(addr string) (*pool.Conn, error) {
 	return conn, nil
 }
 
-func splitFileid(fid string) (string, string, error) {
-	fid = strings.TrimSpace(fid)
-	p := strings.SplitN(fid, "/", 2)
-	if len(p) < 2 {
-		return "", "", errors.New("Fileid format error.")
+
+//查询已有文件存储信息
+func (c *FastdfsClient) queryStorage(gname, rname string, cmd int8) (*Storage, error) {
+	conn, err := getConn(c.connPool)
+	if err != nil {
+		return nil, err
 	}
 
-	return p[0], p[1], nil
+	defer c.connPool.Put(conn)
+
+	groupBytes := buildGroupName(gname)
+
+	th := buildTrackerHeader(cmd, int64(len(groupBytes)+len(rname)))
+	whole := new(bytes.Buffer)
+	whole.Write(th.bytes())
+	whole.Write(groupBytes)
+	whole.WriteString(rname)
+
+	_, err = conn.Write(whole.Bytes())
+	if err != nil {
+		return nil, err
+	}
+
+	buff, err := th.recvPackage(conn, STORAGE_PROTO_CMD_RESP, -1)
+	if err != nil {
+		return nil, err
+	}
+
+	blen := len(buff)
+	if blen < TRACKER_QUERY_STORAGE_FETCH_BODY_LEN {
+		return nil, errors.New("Invalid body length: " + strconv.Itoa(blen))
+	}
+
+	if ((blen - TRACKER_QUERY_STORAGE_FETCH_BODY_LEN) % (FDFS_IPADDR_SIZE - 1)) != 0 {
+		return nil, errors.New("Invalid body length: " + strconv.Itoa(blen))
+	}
+
+	group := readStr(buff[:FDFS_GROUP_NAME_MAX_LEN])
+	ipaddr := readStr(buff[FDFS_GROUP_NAME_MAX_LEN : FDFS_GROUP_NAME_MAX_LEN+FDFS_IPADDR_SIZE-1])
+	port := buffToInt64(buff, FDFS_GROUP_NAME_MAX_LEN+FDFS_IPADDR_SIZE-1)
+
+	addr := net.JoinHostPort(ipaddr, strconv.FormatInt(port,10))
+	p, err := c.getStoragePool(addr)
+	if err != nil {
+		return nil, err
+	}
+	return &Storage{
+		addr:net.JoinHostPort(ipaddr, strconv.FormatInt(port,10)),
+		groupName:group,
+		remoteName:rname,
+		connPool:p,
+	}, nil
 }
