@@ -74,7 +74,7 @@ func (c *FastdfsClient) queryFileInfo(groupName, remoteName string) (*FileInfo, 
 		return nil, err
 	}
 
-	defer c.connPool.Put(conn)
+	defer closeConn(c.connPool, conn)
 
 	groupBytes := buildGroupName(groupName)
 
@@ -110,23 +110,35 @@ func (c *FastdfsClient) queryFileInfo(groupName, remoteName string) (*FileInfo, 
 	}, nil
 }
 
-func (c *FastdfsClient) DownloadToIoReader(fileid string, offset, size int64) (io.ReadCloser, error) {
+//func (c *FastdfsClient) DownloadToIoReader(fileid string, offset, size int64) (io.ReadCloser, int64, error) {
+//	groupName, remoteName, err := splitFileid(fileid)
+//	if err != nil {
+//		return nil, 0, err
+//	}
+//
+//	return c.download(groupName, remoteName, offset, size)
+//}
+
+func (c *FastdfsClient) DownloadToWrite(w io.Writer, fileid string, offset, size int64) (int, error) {
 	groupName, remoteName, err := splitFileid(fileid)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-
-	return c.download(groupName, remoteName, offset, size)
-}
-
-func (c *FastdfsClient) download(groupName, remoteName string, offset, size int64) (io.ReadCloser, error) {
 	storage, err := c.queryStorage(groupName, remoteName, TRACKER_PROTO_CMD_SERVICE_QUERY_FETCH_ONE)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-
-	return storage.downloadFile(offset, size)
+	return storage.downloadToWrite(w, offset, size)
 }
+
+//func (c *FastdfsClient) download(groupName, remoteName string, offset, size int64) (io.ReadCloser, int64, error) {
+//	storage, err := c.queryStorage(groupName, remoteName, TRACKER_PROTO_CMD_SERVICE_QUERY_FETCH_ONE)
+//	if err != nil {
+//		return nil, 0, err
+//	}
+//
+//	return storage.downloadFile(offset, size)
+//}
 
 //获取默认链接的fastdfs pool.conn
 func (c *FastdfsClient) getPoolConn() (*pool.Conn, error) {
@@ -187,7 +199,7 @@ func (c *FastdfsClient) queryStorage(gname, rname string, cmd int8) (*Storage, e
 		return nil, err
 	}
 
-	defer c.connPool.Put(conn)
+	defer closeConn(c.connPool, conn)
 
 	groupBytes := buildGroupName(gname)
 

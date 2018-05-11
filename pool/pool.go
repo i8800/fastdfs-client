@@ -217,10 +217,6 @@ func (p *ConnPool) popDial() *Conn {
 
 //放入连接
 func (p *ConnPool) Put(cn *Conn) error {
-	//当前存在未读完的数据
-	if data := cn.Reader.PeekBuffered(); data != nil {
-		return p.Remove(cn)
-	}
 	p.connsMu.Lock()
 	p.conns = append(p.conns, cn)
 	p.connsMu.Unlock()

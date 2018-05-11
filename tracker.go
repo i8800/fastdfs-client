@@ -51,13 +51,13 @@ func (th *trackerHeader) recvHeader(conn *pool.Conn, cmd int8, needLen int64) er
 		return err
 	}
 
+	if b[PROTO_HEADER_STATUS_INDEX] != 0 {
+		return errors.New("Recv tracker header error, The status code is not 0." + fmt.Sprint(th))
+	}
+
 	if b[PROTO_HEADER_CMD_INDEX] != byte(cmd) {
 		es := fmt.Sprintf("recv cmd error:", b[FDFS_PROTO_PKG_LEN_SIZE], "is not correct.", "expect cmd:", cmd)
 		return errors.New(es)
-	}
-
-	if b[PROTO_HEADER_STATUS_INDEX] != 0 {
-		return errors.New("Recv tracker header error, The status code is not 0.")
 	}
 
 	pl := buffToInt64(b, 0)
