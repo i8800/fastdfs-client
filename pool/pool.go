@@ -105,10 +105,6 @@ func (p *ConnPool) NewConn() (*Conn, error) {
 	}
 
 	cn := NewConn(netConn)
-	p.connsMu.Lock()
-	p.conns = append(p.conns, cn)
-	p.connsMu.Unlock()
-
 	return cn, nil
 }
 

@@ -28,6 +28,9 @@ func getConn(p *pool.ConnPool) (*pool.Conn, error) {
 //把一个连接放入指定连接池，放入之前检测是否是干净的连接
 //如果是不干净的，则会关闭它
 func closeConn(p *pool.ConnPool, c *pool.Conn) {
+	if c == nil {
+		return
+	}
 	if checkConnPure(c) {
 		p.Put(c)
 	} else {

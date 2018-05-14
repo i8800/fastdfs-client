@@ -22,7 +22,6 @@ type Storage struct {
 	remoteName string
 	pathIndex  int
 	connPool   *pool.ConnPool
-	conn       *pool.Conn
 	mu         sync.Mutex
 	closed     bool
 }
@@ -81,6 +80,12 @@ func (s *Storage) downloadToWrite(w io.Writer, offset, downloadSize int64) (int,
 		if int64(readsize) >= th.pkgLen {
 			break
 		}
+	}
+
+	if int64(readsize) != th.pkgLen {
+		//抹除conn
+		s.connPool.Remove(conn)
+		conn = nil
 	}
 
 	return writesize, downerr
